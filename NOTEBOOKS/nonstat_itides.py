@@ -51,6 +51,22 @@ def matern_general(x, xpr, nu, l):
     
     return K
 
+def matern_general_1d(x, xpr, params):
+    """
+    1D Oscillatory kernel
+    """
+    eta, d, nu = params
+
+    return eta**2 * matern_general(x, xpr, nu, d) 
+
+def gamma_exp_1d(x, xpr, params):
+    """
+    1D Oscillatory kernel
+    """
+    eta, d, gam = params
+
+    return eta**2 * gamma_exp(x, xpr, gam, d) 
+    
 def oscillate_1d_matern(x, xpr, params):
     """
     1D Oscillatory kernel
@@ -379,3 +395,71 @@ def estimate_spectral_params_whittle_ufunc(y, priors=None, X=None, covfunc=None,
                                             priors=priors,
                                             method=method, options=options, callback=callback, bounds=bounds)
 
+### Harmonic fitting
+import dask
+def build_lhs_dask(t,frq):
+    """
+    Construct matrix A
+    """
+    nt=t.shape[0]
+    frq = np.array(frq)
+    
+    nf=frq.shape[0]
+    nff=nf*2+1
+    A=np.ones((nt,nff))
+    for ff in range(0,nf):
+        A[:,ff*2+1]=np.cos(frq[ff]*t)
+        A[:,ff*2+2]=np.sin(frq[ff]*t)
+
+    return dask.array.from_array(A, chunks=(A.shape[0],A.shape[1]))
+
+def lstsq_dask(A,y):    
+    """    
+    Solve the least square problem
+
+    Return:
+        the complex amplitude 
+        the mean
+    """
+    N=A.shape[1]
+    b,res,rank,s = dask.array.linalg.lstsq(A,y)
+
+    return b
+
+
+def harmonic_fit_dask(X, t, omega):
+           
+    A = build_lhs_dask(t, omega)
+    # Least-squares matrix approach
+    b = lstsq_dask(A, X) # This works on all columns of X!!
+
+    return b
+
+twopi = 2*np.pi
+tdaysec = 86400.
+def nonstat_harmonic_fit_dask(X, t, omega, na, omega_A=twopi/(365*tdaysec)):
+    frq_all =[]
+    for ff in omega:
+        for n in range(-na,na+1):
+            frq_all.append(ff+n*omega_A)
+
+    Y = harmonic_fit_dask(X, t, frq_all)
+    aa = Y[0,...]
+    Aa = Y[1::2,...]
+    Ba = Y[2::2,...]
+    
+    return aa, Aa, Ba, frq_all
+
+def harmonic_pred_dask(aa, Aa, Ba, omega, tdays):
+    nomega = len(omega)
+    nt = tdays.shape[0]
+    amp = dask.array.ones_like(tdays)[:,None] * aa
+    for ii in range(nomega):
+        amp += Aa[ii,...]*np.cos(omega[ii]*tdays)[:,None] + Ba[ii,...]*np.sin(omega[ii]*tdays)[:,None]
+    
+    return amp
+
+def calc_coherent(ypr, tdays):
+    aa, Aa, Ba, frq_all = nonstat_harmonic_fit_dask(ypr, tdays*86400, [2*np.pi/43200], 0)
+    y_coherent = harmonic_pred_dask(aa, Aa, Ba, frq_all, tdays*86400).compute()
+    return y_coherent[:,0]
