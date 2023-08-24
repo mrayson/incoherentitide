@@ -333,8 +333,21 @@ def itmodel_matern(x, xpr, params, l=0.5):
     
     eta, d,  nu = params
    
-
     return oscillate_1d_matern(x, xpr, (eta, d, l, nu) )
+
+def oscillate_D2D1_gammaexp_fixed(x, xpr, params, 
+                     lt =[ (0.5+0.517525050851839)/2, (0.9972695689985752+1.0758059026974014)/2],
+                                 gam1=1.5, gam2=1.5):
+
+    eta1, d1, eta2, d2, constant = params
+    
+
+    C = oscillate_1d_gammaexp(x, xpr, (eta1, d1, lt[0], gam1))
+    C += oscillate_1d_gammaexp(x, xpr, (eta2, d2, lt[1], gam2))
+    
+    C[0] = C[0] + constant
+
+    return C
 
 # Some functions that could also go into speccy...
 def dwhittle_fast(x, y, ff, I, acffunc, params, delta = 1, h = None, fmin=0, fmax=np.inf):
