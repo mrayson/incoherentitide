@@ -475,4 +475,4 @@ def harmonic_pred_dask(aa, Aa, Ba, omega, tdays):
 def calc_coherent(ypr, tdays):
     aa, Aa, Ba, frq_all = nonstat_harmonic_fit_dask(ypr, tdays*86400, [2*np.pi/43200], 0)
     y_coherent = harmonic_pred_dask(aa, Aa, Ba, frq_all, tdays*86400).compute()
-    return y_coherent[:,0]
+    return y_coherent, aa, Aa, Ba, frq_all
