@@ -112,6 +112,22 @@ def gamma_exp(x, xpr, gam, l):
     dx = calc_dist(x, xpr)
     return np.exp(-np.power(dx/l, gam))
 
+def gamma_exp_1d(x, xpr, params):
+    """
+    1D Oscillatory kernel
+    """
+    eta, d, gam = params
+
+    return eta**2 * gamma_exp(x, xpr, gam, d) 
+    
+def oscillate_1d_matern(x, xpr, params):
+    """
+    1D Oscillatory kernel
+    """
+    eta, d, l, nu = params
+
+    return eta**2 * matern_general(x, xpr, nu, d) * cosine(x, xpr, l)
+
 def oscillate_1d_gammaexp(x, xpr, params):
     """
     1D Oscillatory kernel
@@ -120,17 +136,21 @@ def oscillate_1d_gammaexp(x, xpr, params):
 
     return eta**2 * gamma_exp(x, xpr, gam, d) * cosine(x, xpr, l)
 
+def itmodel_gamma(x, xpr, params, l=0.5):
+    
+    eta, d,  gam = params
+    #gam = nsit.invlogit(logit_gam, scale=2.)
+
+    return oscillate_1d_gammaexp(x, xpr, (eta, d, l, gam) )
+
 def oscillate_D2D1_gammaexp(x, xpr, params, 
                      lt =[ (0.5+0.517525050851839)/2, (0.9972695689985752+1.0758059026974014)/2]):
 
-    eta1, d1, eta2, d2, gam1, gam2, constant = params
+    eta1, d1, eta2, d2, gam1, gam2 = params
     
 
     C = oscillate_1d_gammaexp(x, xpr, (eta1, d1, lt[0], gam1))
     C += oscillate_1d_gammaexp(x, xpr, (eta2, d2, lt[1], gam2))
-    
-    #C[0] = C[0] + constant
-    C = C.at[0].add(constant)
 
     return C
 
@@ -178,6 +198,26 @@ def itide_D2_meso_gammaexp(x, xpr, params,
     C = eta_m**2 * gamma_exp(x, xpr, gam_m, l_m)
     C += oscillate_1d_gammaexp(x, xpr, (eta2, d2, lt, gam1))
 
+    return C
+
+def oscillate_D2D1_gammaexp(x, xpr, params, 
+                     f_cor=2,
+                     lt =[ (0.5+0.517525050851839)/2, (0.9972695689985752+1.0758059026974014)/2],
+                                 gam=1.5):
+
+    eta2, d2, eta3, d3 = params
+    
+    C = oscillate_1d_gammaexp(x, xpr, (eta2, d2, lt[0], gam))
+    C += oscillate_1d_gammaexp(x, xpr, (eta3, d3, lt[1], gam))
+
+    return C
+
+
+def itide_meso_nof_gammaexp(x, xpr, params, **kwargs):
+    eta_m, l_m, gam_m, eta2, d2, eta3, d3 = params
+
+    C = eta_m**2 * gamma_exp(x, xpr, gam_m, l_m)
+    C += oscillate_D2D1_gammaexp(x, xpr, (eta2, d2, eta3, d3), **kwargs)
     return C
 
 def itide_D2_meso_gammaexp_fixed(x, xpr, params, 
