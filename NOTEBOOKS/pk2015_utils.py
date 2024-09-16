@@ -6,7 +6,7 @@ import xarray as xr
 import numpy as np
 from glob import glob
 from scipy.interpolate import interp1d
-
+from scipy import signal
 
 # Create nicer dimensions
 def load_pk2015(ncfile,datavar='ssh'):
@@ -69,3 +69,23 @@ def subset_data(ds, yslice = slice(35,680, 2), xslice = slice(None, None, 10)):
     ds_nonstat['ssh_sin_stat'] = ds['ssh_sin'].mean(axis=0)
 
     return ds_nonstat
+
+def filt(ytmp, cutoff_dt, dt, btype='low', order=8, ftype='sos', axis=-1):
+    """
+    Butterworth filter the time series
+
+    Inputs:
+        cutoff_dt - cuttoff period [seconds]
+        btype - 'low' or 'high' or 'band'
+    """
+    if not btype == 'band':
+        Wn = dt/cutoff_dt
+    else:
+        Wn = [dt/co for co in cutoff_dt]
+    
+    if ftype=='sos':
+        sos = signal.butter(order, Wn, btype, analog=False, output='sos')
+        return signal.sosfiltfilt(sos, ytmp, axis=axis)
+    else:
+        (b, a) = signal.butter(order, Wn, btype=btype, analog=0, output='ba')
+        return signal.filtfilt(b, a, ytmp, axis=axis)
