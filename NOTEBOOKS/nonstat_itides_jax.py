@@ -230,6 +230,16 @@ def itide_D2_meso_gammaexp_fixed(x, xpr, params,
 
     return C
 
+def itide_M2S2_meso_gammaexp(x, xpr, params, 
+                     lt = [0.5175, 0.5] ):
+
+    eta_m, l_m, gam_m, etaM2, etaS2, tauM2, tauS2, gammaM2, gammaS2 = params
+    
+    C = eta_m**2 * gamma_exp(x, xpr, gam_m, l_m)
+    C += oscillate_1d_gammaexp(x, xpr, (etaM2, tauM2, lt[0], gammaM2))
+    C += oscillate_1d_gammaexp(x, xpr, (etaS2, tauS2, lt[1], gammaS2))
+    return C
+
 #################################################
 # Jax parameter estimation/optimisation routines
 #################################################
@@ -276,24 +286,25 @@ class CustomTransformer:
         
 ###
 # Loss functions
-def dwhittle_fast(x, y, ff, I, acffunc, params, delta = 1, h = None, fmin=0, fmax=np.inf, acf_kwargs={}):
+def dwhittle_fast(x, y, ff, I, acffunc, params, fidx, delta = 1, h = None, fmin=0, fmax=np.inf, acf_kwargs={}):
     ff_boch, S_boch = bochner(acffunc(x, x[0], params, **acf_kwargs), delta = delta, bias = True)
     # Subset frequencies
-    idx = (ff > fmin) & (ff<fmax)
+    #idx = (ff > fmin) & (ff<fmax)
     whit = np.log(S_boch) + I/S_boch
-    return -2* np.where(idx, whit, 0).sum()
+    return -2* np.where(fidx, whit, 0).sum()
 
 @jax.value_and_grad
-@partial(jax.jit, static_argnums=(5,6,7,8,9))
-def loss(logparams,  X, y, f, I, covfunc,  dt, fmin, fmax, Transformer, acf_kwargs):
+@partial(jax.jit, static_argnums=(6,7,8))
+def loss(logparams,  X, y, f, I, fidx, covfunc,  dt,  Transformer, acf_kwargs):
     params = Transformer.out(logparams)
-    return -dwhittle_fast(X, y, f, I, covfunc, params, delta=dt, fmin=fmin, fmax=fmax, acf_kwargs=acf_kwargs) 
+    return -dwhittle_fast(X, y, f, I, covfunc, params, fidx, delta=dt, acf_kwargs=acf_kwargs) 
 
 #####
 # Main optimisation routine
 #####
 def estimate_jax(y, X, covfunc, covparams_ic, fmin, fmax,
-                 cov_kwargs={},
+                fidx=None,
+                cov_kwargs={},
                 window=None,
                 verbose=True,
                 maxiter=500,
@@ -303,7 +314,8 @@ def estimate_jax(y, X, covfunc, covparams_ic, fmin, fmax,
 
     dt = X[1]-X[0]
     f, I = periodogram(y, delta=dt, h=window)
-    idx = (f > fmin) & (f<fmax)
+    if fidx is None:
+        fidx = (f > fmin) & (f<fmax)
     
     # def dwhittle_jax(params, acffunc):
     #     ff_boch, S_boch = bochner(acffunc(x, x[0], params))
@@ -322,8 +334,8 @@ def estimate_jax(y, X, covfunc, covparams_ic, fmin, fmax,
     opt_state = opt.init(logparams)
     loss_val = np.inf
     for i in range(maxiter):
-        loss_val_new, grads = loss(logparams, np.array(X), np.array(y), f, I, 
-                                   covfunc,  dt, fmin, fmax, T, cov_kwargs)
+        loss_val_new, grads = loss(logparams, np.array(X), np.array(y), f, I, fidx, 
+                                   covfunc,  dt, T, cov_kwargs)
         #loss_val_new, grads = loss2(logparams, covfunc)
         updates, opt_state = opt.update(grads, opt_state)
         logparams = optax.apply_updates(logparams, updates)
