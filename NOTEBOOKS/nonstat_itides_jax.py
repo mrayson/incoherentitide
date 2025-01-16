@@ -240,6 +240,15 @@ def itide_M2S2_meso_gammaexp(x, xpr, params,
     C += oscillate_1d_gammaexp(x, xpr, (etaS2, tauS2, lt[1], gammaS2))
     return C
 
+def itide_M2S2_meso_gammaexp_fixed(x, xpr, params, 
+                     lt = [0.5175, 0.5], gamma=1 ):
+
+    eta_m, l_m, gam_m, etaM2, etaS2, tauM2, tauS2 = params
+    
+    C = eta_m**2 * gamma_exp(x, xpr, gam_m, l_m)
+    C += oscillate_1d_gammaexp(x, xpr, (etaM2, tauM2, lt[0], gamma))
+    C += oscillate_1d_gammaexp(x, xpr, (etaS2, tauS2, lt[1], gamma))
+    return C
 #################################################
 # Jax parameter estimation/optimisation routines
 #################################################
@@ -310,10 +319,14 @@ def estimate_jax(y, X, covfunc, covparams_ic, fmin, fmax,
                 maxiter=500,
                 ftol=1e-2,
                 opt= optax.sgd(learning_rate=3e-4),
-                transformer=LogTransformer):
+                transformer=LogTransformer,
+                f=None,
+                I=None):
 
     dt = X[1]-X[0]
-    f, I = periodogram(y, delta=dt, h=window)
+    if f is None or I is None:
+        f, I = periodogram(y, delta=dt, h=window)
+        
     if fidx is None:
         fidx = (f > fmin) & (f<fmax)
     
